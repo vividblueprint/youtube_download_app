@@ -44,5 +44,5 @@ exe = EXE(
     target_arch=None,
     codesign_identity=None,
     entitlements_file=None,
-    icon=['assets/youtube_downloader.png'],
+    icon=['assets/youtube_downloader.ico'],
 )

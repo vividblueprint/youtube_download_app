@@ -1,7 +1,7 @@
 [project]
-name = "linux-youtube-downloader"
+name = "youtube-downloader"
 version = "0.1.0"
-description = "A small Tkinter GUI for downloading authorized YouTube content"
+description = "A desktop Tkinter GUI for downloading content the user is authorized to save"
 readme = "README.md"
 requires-python = ">=3.10"
 dependencies = [

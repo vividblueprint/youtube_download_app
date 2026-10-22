@@ -24,7 +24,10 @@ def resource_path(relative_path: str) -> Path:
     return bundle_root / relative_path
 
 def settings_file_path() -> Path:
-    config_root = Path(os.environ.get("XDG_CONFIG_HOME", Path.home() / ".config"))
+    if os.name == "nt":
+        config_root = Path(os.environ.get("APPDATA", Path.home() / "AppData" / "Roaming"))
+    else:
+        config_root = Path(os.environ.get("XDG_CONFIG_HOME", Path.home() / ".config"))
     return config_root / "youtube-downloader" / "settings.json"
 
 def load_settings(path: Path) -> dict:

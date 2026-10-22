@@ -1,7 +1,23 @@
-# YouTube Downloader for Linux
+# YouTube Downloader
 ![Youtube_downloader](./docs/image.png)
 
 A lightweight desktop GUI built with Python and Tkinter. It supports YouTube video and playlist links. Load a playlist, select all or individual videos, then use the left-side buttons to download the selected videos as MP4 or MP3. MP4 downloads prefer a single H.264/AAC stream and merge separate streams only when necessary. MP3 output converts YouTube’s supplied audio stream. Video downloads use H.264/AAC streams directly without re-encoding. If YouTube does not offer those codecs at the selected resolution, try a lower quality.
+
+## Windows 11
+
+The app can be built as a standalone Windows executable. Build it on Windows (PyInstaller does not cross-build Windows apps from Linux):
+
+1. Install Python 3.10 or later and [uv](https://docs.astral.sh/uv/).
+2. Install FFmpeg and make sure `ffmpeg.exe` is available on your `PATH`. It is needed for MP3 conversion and merging separate streams.
+3. Open PowerShell in the project folder and run:
+
+   ```powershell
+   .\build_windows.ps1
+   ```
+
+4. Run `dist\youtube-downloader.exe`. You can copy the executable elsewhere; settings are saved under `%APPDATA%\youtube-downloader\settings.json`.
+
+The Windows build keeps the Linux build and Debian packaging scripts intact. Windows downloads and playlist features use the same `yt-dlp` backend.
 
 ## Install and run with `uv` (recommended)
 
