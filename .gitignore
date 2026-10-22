@@ -1,0 +1,19 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.venv/
+
+# Build and packaging output
+/build/
+/dist/
+/release/
+*.deb
+*.spec.bak
+
+# Local editor and OS files
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/

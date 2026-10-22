@@ -1,0 +1,11 @@
+[Desktop Entry]
+Version=1.0
+Type=Application
+Name=YouTube Downloader
+Comment=Download selected videos from YouTube playlists
+Exec=/home/shamim/.local/bin/youtube-downloader
+TryExec=/home/shamim/.local/bin/youtube-downloader
+Icon=/home/shamim/.local/share/icons/hicolor/256x256/apps/youtube-downloader.png
+Terminal=false
+Categories=AudioVideo;Network;
+StartupWMClass=YouTubeDownloader
