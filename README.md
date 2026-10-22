@@ -1,5 +1,5 @@
 # YouTube Downloader for Linux
-![Youtube_downloader](./docs/youtube_downloader.png)
+![Youtube_downloader](./docs/image.png)
 
 A lightweight desktop GUI built with Python and Tkinter. It supports YouTube video and playlist links. Load a playlist, select all or individual videos, then use the left-side buttons to download the selected videos as MP4 or MP3. MP4 downloads prefer a single H.264/AAC stream and merge separate streams only when necessary. MP3 output converts YouTube’s supplied audio stream. Video downloads use H.264/AAC streams directly without re-encoding. If YouTube does not offer those codecs at the selected resolution, try a lower quality.
 
