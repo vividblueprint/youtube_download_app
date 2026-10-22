@@ -22,7 +22,9 @@ from downloader_app.file_actions import open_folder, play_file
 from downloader_app.helpers import display_duration, is_youtube_url
 from downloader_app.service import YouTubeService
 from downloader_app.thumbnails import fetch_thumbnail
-from downloader_app.widgets import DownloadProgress, RoundedButton, RoundedCombobox
+from downloader_app.widgets import (
+    DownloadProgress, PlaylistCheckbutton, RoundedButton, RoundedCombobox,
+)
 
 class DownloaderApp(tk.Tk):
     def __init__(self) -> None:
@@ -76,14 +78,22 @@ class DownloaderApp(tk.Tk):
         self._url_placeholder_visible = False
         self._settings_save_job = None
         self.select_all_var = tk.BooleanVar(value=False)
+        self.playlist_filter_var = tk.StringVar(value="All")
+        self.playlist_title = ""
         self.playlist_entries: list[dict] = []
         self.selection_vars: list[tk.BooleanVar] = []
+        self.selection_checks: list[PlaylistCheckbutton] = []
+        self.downloaded_entries: list[bool] = []
+        self.playlist_rows: list[tk.Frame] = []
+        self.filter_empty_label: tk.Label | None = None
+        self.download_select_all_var = tk.BooleanVar(value=False)
+        self.download_selection_vars: dict[Path, tk.BooleanVar] = {}
         self._style()
         self._build()
         self.proxy_entry.configure(state="normal" if self.proxy_enabled.get() else "disabled")
         for variable in (self.destination, self.url, self.proxy, self.proxy_enabled, self.quality_choice):
             variable.trace_add("write", self._schedule_settings_save)
-        self.destination.trace_add("write", lambda *_: self._refresh_downloads())
+        self.destination.trace_add("write", self._on_destination_changed)
         self.protocol("WM_DELETE_WINDOW", self._on_close)
         self.after(100, self._drain_events)
         self.bind_all("<MouseWheel>", self._on_mousewheel, add="+")
@@ -95,7 +105,7 @@ class DownloaderApp(tk.Tk):
         style.theme_use("clam")
         style.configure("TNotebook", background=BG, borderwidth=0)
         style.configure("TNotebook.Tab", background=PANEL_LIGHT, foreground=ACCENT,
-                        padding=(15, 7), font=("TkDefaultFont", 9, "bold"))
+                        padding=(15, 7), font=("DejaVu Sans", 9, "bold"))
         style.map("TNotebook.Tab", background=[("selected", ACCENT), ("active", "#303846")],
                   foreground=[("selected", "white"), ("active", "white")])
         style.configure("TCombobox", fieldbackground=PANEL_LIGHT, background=PANEL_LIGHT,
@@ -187,18 +197,18 @@ class DownloaderApp(tk.Tk):
         title_box = tk.Frame(header, bg=BG)
         title_box.pack(side="left", anchor="center")
         tk.Label(title_box, text="Video Downloader", bg=BG, fg=TEXT,
-                 font=("TkDefaultFont", 21, "bold")).pack(anchor="w")
+                 font=("DejaVu Sans", 21, "bold")).pack(anchor="w")
         tk.Label(title_box, text="Choose videos from a playlist and download only what you select",
-                 bg=BG, fg=MUTED, font=("TkDefaultFont", 10)).pack(anchor="w", pady=(2, 0))
+                 bg=BG, fg=MUTED, font=("DejaVu Sans", 10)).pack(anchor="w", pady=(2, 0))
 
         link_card = tk.Frame(root, bg=PANEL, padx=14, pady=13)
         link_card.pack(fill="x", pady=(0, 16))
         tk.Label(link_card, text="YouTube video or playlist link", bg=PANEL, fg=TEXT,
-                 font=("TkDefaultFont", 10, "bold")).pack(anchor="w", pady=(0, 8))
+                 font=("DejaVu Sans", 10, "bold")).pack(anchor="w", pady=(0, 8))
         link_row = tk.Frame(link_card, bg=PANEL)
         link_row.pack(fill="x")
         self.url_entry = RoundedCombobox(link_row, textvariable=self.url, values=self.url_history,
-                                         state="normal", style="Dark.TCombobox", font=("TkDefaultFont", 11))
+                                         state="normal", style="Dark.TCombobox", font=("DejaVu Sans", 11))
         self.url_entry.pack(side="left", fill="x", expand=True, padx=(0, 8))
         self.url_entry.bind("<Control-v>", lambda _e: self.after(80, self._trim_url))
         self.url_entry.bind("<FocusIn>", self._clear_url_placeholder)
@@ -215,11 +225,11 @@ class DownloaderApp(tk.Tk):
             proxy_row, text="Use proxy", variable=self.proxy_enabled, command=self._toggle_proxy,
             bg=PANEL, fg=MUTED, activebackground=PANEL, activeforeground=TEXT,
             selectcolor=BG, relief="flat", highlightthickness=0, cursor="hand2",
-            font=("TkDefaultFont", 9),
+            font=("DejaVu Sans", 9),
         )
         self.proxy_check.pack(side="left", padx=(0, 8))
         self.proxy_entry = RoundedCombobox(proxy_row, textvariable=self.proxy, values=self.proxy_history,
-                                           state="normal", style="Dark.TCombobox", font=("TkDefaultFont", 9))
+                                           state="normal", style="Dark.TCombobox", font=("DejaVu Sans", 9))
         self.proxy_entry.pack(side="left", fill="x", expand=True)
 
         body = tk.Frame(root, bg=BG)
@@ -229,7 +239,7 @@ class DownloaderApp(tk.Tk):
         sidebar.pack(side="left", fill="y", padx=(0, 14))
         sidebar.pack_propagate(False)
         tk.Label(sidebar, text="DOWNLOAD SELECTED", bg=PANEL, fg=MUTED,
-                 font=("TkDefaultFont", 9, "bold")).pack(anchor="w", pady=(0, 9))
+                 font=("DejaVu Sans", 9, "bold")).pack(anchor="w", pady=(0, 9))
         self.video_button = self._button(sidebar, "↓  Download video", lambda: self._start_download("video"), primary=True)
         self.video_button.pack(fill="x", pady=(0, 8))
         self.mp3_button = self._button(sidebar, "♫  Download MP3", lambda: self._start_download("mp3"))
@@ -237,16 +247,16 @@ class DownloaderApp(tk.Tk):
         self.mp3_button.pack_configure(pady=(0, 18))
 
         tk.Label(sidebar, text="VIDEO QUALITY", bg=PANEL, fg=MUTED,
-                 font=("TkDefaultFont", 9, "bold")).pack(anchor="w")
+                 font=("DejaVu Sans", 9, "bold")).pack(anchor="w")
         self.quality_box = ttk.Combobox(sidebar, state="readonly", textvariable=self.quality_choice,
                                         values=("Best available", "1080p", "720p", "480p"),
-                                        font=("TkDefaultFont", 10))
+                                        font=("DejaVu Sans", 10))
         self.quality_box.pack(fill="x", pady=(7, 18))
 
         tk.Label(sidebar, text="SAVE TO", bg=PANEL, fg=MUTED,
-                 font=("TkDefaultFont", 9, "bold")).pack(anchor="w")
+                 font=("DejaVu Sans", 9, "bold")).pack(anchor="w")
         self.folder_label = tk.Label(sidebar, textvariable=self.destination, bg=PANEL, fg=TEXT,
-                                     font=("TkDefaultFont", 9), anchor="w", justify="left",
+                                     font=("DejaVu Sans", 9), anchor="w", justify="left",
                                      wraplength=184)
         self.folder_label.pack(fill="x", pady=(7, 9))
         self._button(sidebar, "Choose folder", self._choose_folder).pack(fill="x")
@@ -266,10 +276,10 @@ class DownloaderApp(tk.Tk):
         title_group = tk.Frame(list_header, bg=PANEL)
         title_group.pack(side="left", fill="x", expand=True)
         tk.Label(title_group, text="Playlist videos", bg=PANEL, fg=TEXT,
-                 font=("TkDefaultFont", 13, "bold")).pack(anchor="w")
+                 font=("DejaVu Sans", 13, "bold")).pack(anchor="w")
         self.list_status_var = tk.StringVar(value="Paste a playlist link and select Load videos")
         tk.Label(title_group, textvariable=self.list_status_var, bg=PANEL, fg=MUTED,
-                 font=("TkDefaultFont", 9)).pack(anchor="w", pady=(3, 0))
+                 font=("DejaVu Sans", 9)).pack(anchor="w", pady=(3, 0))
 
         select_row = tk.Frame(playlist_tab, bg=PANEL_LIGHT, padx=9, pady=5)
         select_row.pack(fill="x", pady=(0, 8))
@@ -277,13 +287,22 @@ class DownloaderApp(tk.Tk):
             select_row, text="Select all", variable=self.select_all_var,
             command=self._toggle_all, bg=PANEL_LIGHT, fg=TEXT,
             activebackground=PANEL_LIGHT, activeforeground=TEXT,
-            selectcolor=BG, font=("TkDefaultFont", 9, "bold"), relief="flat",
+            selectcolor=BG, font=("DejaVu Sans", 9, "bold"), relief="flat",
             highlightthickness=0, cursor="hand2",
         )
         self.select_all_check.pack(side="left")
         self.selected_count_var = tk.StringVar(value="0 selected")
         tk.Label(select_row, textvariable=self.selected_count_var, bg=PANEL_LIGHT, fg=MUTED,
-                 font=("TkDefaultFont", 9)).pack(side="right")
+                 font=("DejaVu Sans", 9)).pack(side="right")
+        self.filter_box = ttk.Combobox(
+            select_row, textvariable=self.playlist_filter_var,
+            values=("All", "Downloaded", "To download"), state="readonly",
+            style="Dark.TCombobox", width=13,
+        )
+        self.filter_box.pack(side="right", padx=(8, 5))
+        tk.Label(select_row, text="Show", bg=PANEL_LIGHT, fg=TEXT,
+                 font=("DejaVu Sans", 9, "bold")).pack(side="right")
+        self.filter_box.bind("<<ComboboxSelected>>", self._apply_playlist_filter)
 
         list_area = tk.Frame(playlist_tab, bg=PANEL)
         list_area.pack(fill="both", expand=True)
@@ -300,11 +319,26 @@ class DownloaderApp(tk.Tk):
 
         downloads_header = tk.Frame(downloads_tab, bg=PANEL)
         downloads_header.pack(fill="x", pady=(0, 8))
-        tk.Label(downloads_header, text="Saved media files", bg=PANEL, fg=TEXT,
-                 font=("TkDefaultFont", 13, "bold")).pack(anchor="w")
+        downloads_heading = tk.Frame(downloads_header, bg=PANEL)
+        downloads_heading.pack(fill="x")
+        tk.Label(downloads_heading, text="Saved media files", bg=PANEL, fg=TEXT,
+                 font=("DejaVu Sans", 13, "bold")).pack(side="left", anchor="w")
+        self.delete_selected_button = self._button(
+            downloads_heading, "Delete selected", self._delete_selected_downloads,
+            primary=True, width=132,
+        )
+        self.delete_selected_button.pack(side="right")
+        self.download_select_all_check = tk.Checkbutton(
+            downloads_heading, text="Select all", variable=self.download_select_all_var,
+            command=self._toggle_all_downloads, bg=PANEL, fg=TEXT,
+            activebackground=PANEL, activeforeground=TEXT, selectcolor=BG,
+            font=("DejaVu Sans", 9, "bold"), relief="flat",
+            highlightthickness=0, cursor="hand2",
+        )
+        self.download_select_all_check.pack(side="right", padx=(0, 10))
         self.downloads_status_var = tk.StringVar(value="Files in the selected download folder")
         tk.Label(downloads_header, textvariable=self.downloads_status_var, bg=PANEL, fg=MUTED,
-                 font=("TkDefaultFont", 9)).pack(anchor="w", pady=(3, 0))
+                 font=("DejaVu Sans", 9)).pack(anchor="w", pady=(3, 0))
         downloads_area = tk.Frame(downloads_tab, bg=PANEL)
         downloads_area.pack(fill="both", expand=True)
         self.downloads_canvas = tk.Canvas(downloads_area, bg=PANEL, highlightthickness=0, bd=0)
@@ -326,15 +360,15 @@ class DownloaderApp(tk.Tk):
         status_line = tk.Frame(status_card, bg=PANEL)
         status_line.pack(fill="x", pady=(0, 7))
         tk.Label(status_line, textvariable=self.status_var, bg=PANEL, fg=TEXT,
-                 font=("TkDefaultFont", 9)).pack(side="left")
+                 font=("DejaVu Sans", 9)).pack(side="left")
         self.progress = DownloadProgress(status_card)
         self.progress.pack(fill="x")
         self.cancel_button = self._button(footer, "Cancel", self._cancel, style="text")
 
         tk.Label(root, text="Only download content you own or have permission to save.", bg=BG,
-                 fg=MUTED, font=("TkDefaultFont", 9)).pack(anchor="w", pady=(9, 0))
+                 fg=MUTED, font=("DejaVu Sans", 9)).pack(anchor="w", pady=(9, 0))
         tk.Label(root, text="Developed by Shamim", bg=BG, fg=MUTED,
-                 font=("TkDefaultFont", 9)).pack(anchor="e")
+                 font=("DejaVu Sans", 9)).pack(anchor="e")
 
     @staticmethod
     def _button(parent, text: str, command, primary: bool = False, style: str = "secondary", width: int = 120, subtle: bool = False):
@@ -343,8 +377,15 @@ class DownloaderApp(tk.Tk):
     def _show_empty_message(self, text: str) -> None:
         for child in self.list_inner.winfo_children():
             child.destroy()
+        self.playlist_entries = []
+        self.selection_vars = []
+        self.selection_checks = []
+        self.downloaded_entries = []
+        self.playlist_rows = []
+        self.filter_empty_label = None
+        self.select_all_var.set(False)
         tk.Label(self.list_inner, text=text, bg=PANEL, fg=MUTED,
-                 font=("TkDefaultFont", 10), pady=30).pack(fill="x")
+                 font=("DejaVu Sans", 10), pady=30).pack(fill="x")
 
     def _resize_list_inner(self, event) -> None:
         self.list_canvas.itemconfigure(self.list_window, width=event.width)
@@ -367,6 +408,10 @@ class DownloaderApp(tk.Tk):
         self._download_thumbnail_labels = []
         for child in self.downloads_inner.winfo_children():
             child.destroy()
+        previously_selected = {
+            path for path, variable in self.download_selection_vars.items() if variable.get()
+        }
+        self.download_selection_vars = {}
         folder = Path(self.destination.get()).expanduser()
         extensions = {".mp4", ".mkv", ".webm", ".mp3", ".m4a", ".mov", ".avi", ".wav", ".flac"}
         try:
@@ -376,11 +421,18 @@ class DownloaderApp(tk.Tk):
             files = []
         if not files:
             tk.Label(self.downloads_inner, text="No media files found in this download folder",
-                     bg=PANEL, fg=MUTED, font=("TkDefaultFont", 10), pady=30).pack(fill="x")
+                     bg=PANEL, fg=MUTED, font=("DejaVu Sans", 10), pady=30).pack(fill="x")
         for index, path in enumerate(files):
             row_bg = PANEL if index % 2 == 0 else "#1c222c"
             row = tk.Frame(self.downloads_inner, bg=row_bg, padx=7, pady=5)
             row.pack(fill="x")
+            selected = tk.BooleanVar(value=path in previously_selected)
+            self.download_selection_vars[path] = selected
+            tk.Checkbutton(
+                row, variable=selected, command=self._update_download_selection_controls,
+                bg=row_bg, fg=TEXT, activebackground=row_bg, activeforeground=TEXT,
+                selectcolor=BG, relief="flat", highlightthickness=0, cursor="hand2",
+            ).pack(side="left", padx=(0, 7))
             thumbnail = tk.Label(row, bg=PANEL_LIGHT, width=12, height=4, bd=0)
             thumbnail.pack(side="left", padx=(0, 9))
             self._download_thumbnail_labels.append(thumbnail)
@@ -396,12 +448,62 @@ class DownloaderApp(tk.Tk):
             self._button(row, "Play", lambda p=path: self._play_download(p), width=64).pack(side="right", padx=(4, 0))
             self._button(row, "Delete", lambda p=path: self._delete_download(p), subtle=True, width=68).pack(side="right", padx=(4, 0))
             name = tk.Label(row, text=path.name, bg=row_bg, fg=TEXT, anchor="w",
-                            justify="left", wraplength=430, font=("TkDefaultFont", 9))
+                            justify="left", wraplength=430, font=("DejaVu Sans", 9))
             name.pack(side="left", fill="x", expand=True, padx=(2, 8))
-        self.downloads_status_var.set(f"{len(files)} media file" + ("s" if len(files) != 1 else "") + f" in {folder}")
+        self.downloads_folder = folder
+        self._update_download_selection_controls()
+
+    def _update_download_selection_controls(self) -> None:
+        total = len(self.download_selection_vars)
+        selected_count = sum(variable.get() for variable in self.download_selection_vars.values())
+        self.download_select_all_var.set(bool(total) and selected_count == total)
+        self.delete_selected_button.configure(state="normal" if selected_count else "disabled")
+        folder = getattr(self, "downloads_folder", Path(self.destination.get()).expanduser())
+        count_label = f"{total} media file" + ("s" if total != 1 else "")
+        self.downloads_status_var.set(
+            f"{count_label} in {folder} · {selected_count} selected"
+        )
+
+    def _toggle_all_downloads(self) -> None:
+        selected = self.download_select_all_var.get()
+        for variable in self.download_selection_vars.values():
+            variable.set(selected)
+        self._update_download_selection_controls()
+
+    def _delete_selected_downloads(self) -> None:
+        selected_paths = [
+            path for path, variable in self.download_selection_vars.items() if variable.get()
+        ]
+        if not selected_paths:
+            return
+        count = len(selected_paths)
+        noun = "file" if count == 1 else "files"
+        if not messagebox.askyesno(
+            "Delete selected downloads",
+            f"Delete {count} selected {noun} permanently?",
+        ):
+            return
+
+        failures = []
+        for path in selected_paths:
+            try:
+                path.unlink()
+            except OSError as exc:
+                failures.append(f"{path.name}: {exc}")
+        self._refresh_downloads()
+        if failures:
+            messagebox.showerror(
+                "Some files could not be deleted", "\n".join(failures[:10])
+            )
 
     def _on_mousewheel(self, event):
-        widget = self.winfo_containing(event.x_root, event.y_root)
+        try:
+            widget = self.winfo_containing(event.x_root, event.y_root)
+        except (KeyError, tk.TclError):
+            # Tk's native message boxes are not registered in this widget tree.
+            return
+        if widget is None:
+            return
         while widget is not None:
             if widget in (self.list_canvas, self.list_inner):
                 canvas = self.list_canvas
@@ -482,7 +584,11 @@ class DownloaderApp(tk.Tk):
         selected = filedialog.askdirectory(initialdir=self.destination.get(), title="Choose download folder")
         if selected:
             self.destination.set(selected)
-            self._refresh_downloads()
+
+    def _on_destination_changed(self, *_args) -> None:
+        self._refresh_downloads()
+        self._refresh_playlist_download_status()
+        self._update_selection_count()
 
     def _set_busy(self, busy: bool) -> None:
         self.busy = busy
@@ -493,8 +599,8 @@ class DownloaderApp(tk.Tk):
         self.select_all_check.configure(state=state)
         for child in self.list_inner.winfo_children():
             for widget in child.winfo_children():
-                if isinstance(widget, tk.Checkbutton):
-                    widget.configure(state=state)
+                if isinstance(widget, PlaylistCheckbutton):
+                    widget.set_enabled(not busy)
 
     def _remember_url(self, value: str) -> None:
         self.url_history = [value] + [item for item in self.url_history if item != value]
@@ -533,9 +639,15 @@ class DownloaderApp(tk.Tk):
         self.service.read_playlist(link, proxy)
 
     def _render_playlist(self, title: str, entries: list[dict], proxy: str = "") -> None:
+        self.playlist_title = title
         self.playlist_entries = entries
         self.selection_vars = []
+        self.selection_checks = []
+        self.downloaded_entries = []
+        self.playlist_rows = []
+        self.filter_empty_label = None
         self.select_all_var.set(False)
+        self.playlist_filter_var.set("All")
         for child in self.list_inner.winfo_children():
             child.destroy()
         self._playlist_generation += 1
@@ -546,15 +658,18 @@ class DownloaderApp(tk.Tk):
             row_bg = PANEL if index % 2 == 0 else "#1c222c"
             row = tk.Frame(self.list_inner, bg=row_bg, padx=5, pady=4)
             row.pack(fill="x")
-            selected = tk.BooleanVar(value=bool(
+            self.playlist_rows.append(row)
+            downloaded = bool(
                 self._existing_files_for_entry(Path(self.destination.get()).expanduser(), entry)
-            ))
-            self.selection_vars.append(selected)
-            check = tk.Checkbutton(
-                row, variable=selected, command=self._update_selection_count,
-                bg=row_bg, fg=TEXT, activebackground=row_bg, activeforeground=TEXT,
-                selectcolor=BG, relief="flat", highlightthickness=0, cursor="hand2",
             )
+            selected = tk.BooleanVar(value=False)
+            self.selection_vars.append(selected)
+            self.downloaded_entries.append(downloaded)
+            check = PlaylistCheckbutton(
+                row, variable=selected, command=self._on_playlist_item_toggled,
+                background=row_bg, downloaded=downloaded,
+            )
+            self.selection_checks.append(check)
             check.pack(side="left", padx=(1, 7))
             thumbnail = tk.Label(row, bg=PANEL_LIGHT, width=16, height=4, bd=0)
             thumbnail.pack(side="left", padx=(0, 9))
@@ -569,15 +684,18 @@ class DownloaderApp(tk.Tk):
             text_box = tk.Frame(row, bg=row_bg)
             text_box.pack(side="left", fill="x", expand=True, pady=5)
             tk.Label(text_box, text=entry["title"], bg=row_bg, fg=TEXT, anchor="w",
-                     justify="left", wraplength=650, font=("TkDefaultFont", 9)).pack(fill="x", anchor="w")
+                     justify="left", wraplength=650, font=("DejaVu Sans", 9)).pack(fill="x", anchor="w")
             duration = display_duration(entry.get("duration"))
             if duration:
                 tk.Label(row, text=duration, bg=row_bg, fg=MUTED,
-                         font=("TkDefaultFont", 9)).pack(side="right", padx=(8, 6))
+                         font=("DejaVu Sans", 9)).pack(side="right", padx=(8, 6))
         if not entries:
             self._show_empty_message("No downloadable videos were found in this playlist")
-        self.list_status_var.set(f"{title} · {len(entries)} video" + ("s" if len(entries) != 1 else ""))
-        self._update_selection_count()
+            self.playlist_title = title
+            self.list_status_var.set(f"{title} · 0 videos")
+            self._update_selection_count()
+        else:
+            self._apply_playlist_filter()
         self.list_canvas.yview_moveto(0)
         self._set_busy(False)
         self.status_var.set("Select videos to download")
@@ -602,15 +720,86 @@ class DownloaderApp(tk.Tk):
 
     def _toggle_all(self) -> None:
         value = self.select_all_var.get()
-        for selected in self.selection_vars:
-            selected.set(value)
+        for index in self._visible_playlist_indices():
+            self.selection_vars[index].set(value)
+        self._refresh_playlist_download_status()
         self._update_selection_count()
+
+    def _on_playlist_item_toggled(self) -> None:
+        self._refresh_playlist_download_status()
+        self._update_selection_count()
+
+    def _visible_playlist_indices(self) -> list[int]:
+        selected_filter = self.playlist_filter_var.get()
+        if selected_filter == "Downloaded":
+            return [i for i, downloaded in enumerate(self.downloaded_entries) if downloaded]
+        if selected_filter == "To download":
+            return [i for i, downloaded in enumerate(self.downloaded_entries) if not downloaded]
+        return list(range(len(self.playlist_entries)))
+
+    def _apply_playlist_filter(self, _event=None) -> None:
+        if not self.playlist_rows:
+            self._update_selection_count()
+            return
+
+        visible_indices = set(self._visible_playlist_indices())
+        for index, row in enumerate(self.playlist_rows):
+            row.pack_forget()
+            if index in visible_indices:
+                row.pack(fill="x")
+
+        if self.filter_empty_label is None or not self.filter_empty_label.winfo_exists():
+            self.filter_empty_label = tk.Label(
+                self.list_inner, bg=PANEL, fg=MUTED,
+                font=("DejaVu Sans", 10), pady=30,
+            )
+        self.filter_empty_label.pack_forget()
+        if not visible_indices:
+            filter_name = self.playlist_filter_var.get().lower()
+            self.filter_empty_label.configure(text=f"No {filter_name} videos in this playlist")
+            self.filter_empty_label.pack(fill="x")
+
+        visible_count = len(visible_indices)
+        total = len(self.playlist_entries)
+        if self.playlist_filter_var.get() == "All":
+            self.list_status_var.set(
+                f"{self.playlist_title} · {total} video" + ("s" if total != 1 else "")
+            )
+        else:
+            self.list_status_var.set(
+                f"{self.playlist_title} · showing {visible_count} of {total} videos"
+            )
+        self._update_selection_count()
+        self.list_canvas.configure(scrollregion=self.list_canvas.bbox("all"))
+
+    def _refresh_playlist_download_status(self) -> None:
+        """Refresh each row's downloaded marker from the current save folder."""
+        if not self.playlist_entries:
+            return
+        folder = Path(self.destination.get()).expanduser()
+        try:
+            files = [path for path in folder.iterdir() if path.is_file()]
+        except OSError:
+            return
+
+        for index, entry in enumerate(self.playlist_entries):
+            video_id = entry.get("id")
+            marker = re.escape(f"[{video_id}]") if video_id else None
+            downloaded = bool(marker) and any(
+                re.search(rf"{marker}(?:\d+)?$", path.stem) for path in files
+            )
+            self.downloaded_entries[index] = downloaded
+            self.selection_checks[index].set_downloaded(downloaded)
+        self._apply_playlist_filter()
 
     def _update_selection_count(self) -> None:
         selected_count = sum(1 for selected in self.selection_vars if selected.get())
         total = len(self.selection_vars)
         self.selected_count_var.set(f"{selected_count} of {total} selected")
-        self.select_all_var.set(bool(total) and selected_count == total)
+        visible_indices = self._visible_playlist_indices()
+        self.select_all_var.set(
+            bool(visible_indices) and all(self.selection_vars[i].get() for i in visible_indices)
+        )
 
     @staticmethod
     def _existing_files_for_entry(folder: Path, entry: dict) -> list[Path]:
@@ -659,15 +848,25 @@ class DownloaderApp(tk.Tk):
             return
         download_items = []
         reserved_suffixes: dict[str, set[int]] = {}
+        stop_duplicate_prompts = False
         for entry in selected:
             existing_files = self._existing_files_for_entry(folder, entry)
             item = dict(entry)
             if existing_files:
-                if not messagebox.askyesno(
+                if stop_duplicate_prompts:
+                    continue
+                answer = messagebox.askyesnocancel(
                     "Already downloaded",
                     f"{entry['title']} is already in the download folder as "
-                    f"{existing_files[0].name}.\n\nDownload another copy with a numbered name?",
-                ):
+                    f"{existing_files[0].name}.\n\n"
+                    "Yes: download another copy with a numbered name.\n"
+                    "No: skip this video and ask about the next existing video.\n"
+                    "Cancel or close: stop asking about existing videos.",
+                )
+                if answer is None:
+                    stop_duplicate_prompts = True
+                    continue
+                if not answer:
                     continue
                 video_id = str(entry.get("id") or entry["title"])
                 reserved = reserved_suffixes.setdefault(video_id, set())
@@ -739,6 +938,8 @@ class DownloaderApp(tk.Tk):
                     self._set_busy(False)
                     self.cancel_button.pack_forget()
                     self.cancel_button.configure(state="normal", text="Cancel")
+                    self._refresh_playlist_download_status()
+                    self._update_selection_count()
                     self._refresh_downloads()
                     self.progress.configure(value=100 if completed == total else 0)
                     if cancelled:

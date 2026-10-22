@@ -6,6 +6,74 @@ from tkinter import ttk
 
 from .config import ACCENT, MUTED, PANEL, PANEL_LIGHT
 
+class PlaylistCheckbutton(tk.Canvas):
+    """Small custom checkbox that marks undownloaded playlist entries in red."""
+    def __init__(self, parent, variable: tk.BooleanVar, command, *, background: str,
+                 downloaded: bool = False):
+        self.variable = variable
+        self.command = command
+        self.background = background
+        self.downloaded = downloaded
+        self.enabled = True
+        self.focused = False
+        super().__init__(parent, width=18, height=18, bg=background, bd=0,
+                         highlightthickness=0, cursor="hand2", takefocus=1)
+        self.bind("<Button-1>", self._toggle)
+        self.bind("<space>", self._toggle)
+        self.bind("<Return>", self._toggle)
+        self.bind("<FocusIn>", self._on_focus_in)
+        self.bind("<FocusOut>", self._on_focus_out)
+        self.variable.trace_add("write", self._draw)
+        self._draw()
+
+    def set_enabled(self, enabled: bool) -> None:
+        self.enabled = enabled
+        self.configure(cursor="hand2" if enabled else "arrow")
+        self._draw()
+
+    def set_downloaded(self, downloaded: bool) -> None:
+        self.downloaded = downloaded
+        self._draw()
+
+    def _toggle(self, _event=None):
+        if not self.enabled:
+            return "break"
+        self.focus_set()
+        self.variable.set(not self.variable.get())
+        if self.command:
+            self.command()
+        return "break"
+
+    def _on_focus_in(self, _event=None):
+        self.focused = True
+        self._draw()
+
+    def _on_focus_out(self, _event=None):
+        self.focused = False
+        self._draw()
+
+    def _draw(self, *_args):
+        self.delete("all")
+        checked = self.variable.get()
+        if not self.enabled:
+            outline = "#626b77"
+        elif checked:
+            outline = ACCENT
+        elif not self.downloaded:
+            outline = ACCENT
+        else:
+            outline = "#858e9a"
+        fill = ACCENT if checked and self.enabled else self.background
+        self.create_rectangle(3, 3, 15, 15, fill=fill, outline=outline,
+                              width=2 if not checked and not self.downloaded and self.enabled else 1)
+        if checked:
+            color = "white" if self.enabled else "#aeb4bd"
+            self.create_line(5, 9, 8, 12, 13, 6, fill=color, width=2,
+                             capstyle="round", joinstyle="round")
+        if self.focused and self.enabled:
+            self.create_rectangle(1, 1, 17, 17, outline="#c2c8d0", dash=(1, 2))
+
+
 class RoundedButton(tk.Canvas):
     def __init__(self, parent, text: str, command, primary: bool = False, subtle: bool = False, width: int = 120):
         self._enabled = True
@@ -73,7 +141,7 @@ class RoundedButton(tk.Canvas):
                             style="pieslice", fill=color, outline=color)
         foreground = self._foreground if self._enabled else "#9299a2"
         self.create_text(width / 2, height / 2, text=self._text, fill=foreground,
-                         font=("TkDefaultFont", 9, "bold" if self._primary else "normal"))
+                         font=("DejaVu Sans", 9, "bold" if self._primary else "normal"))
 
 
 class DownloadProgress(tk.Canvas):
@@ -105,7 +173,7 @@ class DownloadProgress(tk.Canvas):
         if fill_width > 0:
             self.create_rectangle(0, 0, fill_width, height, fill=ACCENT, outline="")
         self.create_text(width / 2, height / 2, text=f"{self.value:.0f}%", fill="white",
-                         font=("TkDefaultFont", 9, "bold"))
+                         font=("DejaVu Sans", 9, "bold"))
 
 
 class RoundedCombobox(tk.Frame):
