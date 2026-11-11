@@ -1,7 +1,59 @@
-# YouTube Downloader for Linux
-![Youtube_downloader](./docs/image.png)
+<div align="center">
+
+<img src="./assets/image.png" alt="Repository Banner" width="800">
+
+<h1 align="center" >
+
+<img width="25px" src="https://em-content.zobj.net/source/microsoft-teams/337/heart-with-ribbon_1f49d.png"/>
+<img width="25px" src="https://em-content.zobj.net/source/microsoft-teams/337/heart-with-ribbon_1f49d.png"/>
+<img width="25px" src="https://em-content.zobj.net/source/microsoft-teams/337/heart-with-ribbon_1f49d.png"/>
+<b>YouTube Downloader</b>
+<img width="25px" src="https://em-content.zobj.net/source/microsoft-teams/337/heart-with-ribbon_1f49d.png"/>
+<img width="25px" src="https://em-content.zobj.net/source/microsoft-teams/337/heart-with-ribbon_1f49d.png"/>
+<img width="25px" src="https://em-content.zobj.net/source/microsoft-teams/337/heart-with-ribbon_1f49d.png"/>
+
+</h1>
+
+[![GitHub](https://img.shields.io/badge/GitHub-vividblueprint-181717?logo=github&logoColor=white)](https://github.com/vividblueprint)
+[![Issues](https://img.shields.io/github/issues/vividblueprint/youtube_download_app?style=flat)](https://github.com/vividblueprint/youtube_download_app/issues)
+[![Pull Requests](https://img.shields.io/github/issues-pr/vividblueprint/youtube_download_app?style=flat)](https://github.com/vividblueprint/youtube_download_app/pulls)
+[![Contributors](https://img.shields.io/github/contributors/vividblueprint/youtube_download_app?style=flat)](https://github.com/vividblueprint/youtube_download_app/graphs/contributors)
+[![Stars](https://img.shields.io/github/stars/vividblueprint/youtube_download_app?style=flat)](https://github.com/vividblueprint/youtube_download_app/stargazers)
+[![Forks](https://img.shields.io/github/forks/vividblueprint/youtube_download_app?style=flat)](https://github.com/vividblueprint/youtube_download_app/forks)
+[![Watchers](https://img.shields.io/github/watchers/vividblueprint/youtube_download_app?style=flat)](https://github.com/vividblueprint/youtube_download_app/watchers)
+[![Last Commit](https://img.shields.io/github/last-commit/vividblueprint/youtube_download_app?style=flat)](https://github.com/vividblueprint/youtube_download_app/commits)
+[![Monthly Commits](https://img.shields.io/github/commit-activity/m/vividblueprint/youtube_download_app?style=flat)](https://github.com/vividblueprint/youtube_download_app/commits)
+[![Languages](https://img.shields.io/github/languages/count/vividblueprint/youtube_download_app?style=flat)](https://github.com/vividblueprint/youtube_download_app)
+[![Code Size](https://img.shields.io/github/languages/code-size/vividblueprint/youtube_download_app?style=flat)](https://github.com/vividblueprint/youtube_download_app)
+[![Repo Size](https://img.shields.io/github/repo-size/vividblueprint/youtube_download_app?style=flat)](https://github.com/vividblueprint/youtube_download_app)
+[![Total Commits](https://img.shields.io/github/commit-activity/t/vividblueprint/youtube_download_app?style=flat&label=Total%20Commits)](https://github.com/vividblueprint/youtube_download_app/commits)
+[![Files](https://img.shields.io/github/directory-file-count/vividblueprint/youtube_download_app?type=file&style=flat)](https://github.com/vividblueprint/youtube_download_app/tree/HEAD)
+[![License](https://img.shields.io/github/license/vividblueprint/youtube_download_app?style=flat)](https://github.com/vividblueprint/youtube_download_app/blob/HEAD/LICENSE)
+
+</div>
+
+---
+
+## Introduction
+
 
 A lightweight desktop GUI built with Python and Tkinter. It supports YouTube video and playlist links. Load a playlist, select all or individual videos, then use the left-side buttons to download the selected videos as MP4 or MP3. MP4 downloads prefer a single H.264/AAC stream and merge separate streams only when necessary. MP3 output converts YouTube’s supplied audio stream. Video downloads use H.264/AAC streams directly without re-encoding. If YouTube does not offer those codecs at the selected resolution, try a lower quality.
+
+## Windows 11
+
+The app can be built as a standalone Windows executable. Build it on Windows (PyInstaller does not cross-build Windows apps from Linux):
+
+1. Install Python 3.10 or later and [uv](https://docs.astral.sh/uv/).
+2. Install FFmpeg and make sure `ffmpeg.exe` is available on your `PATH`. It is needed for MP3 conversion and merging separate streams.
+3. Open PowerShell in the project folder and run:
+
+   ```powershell
+   .\build_windows.ps1
+   ```
+
+4. Run `dist\youtube-downloader.exe`. You can copy the executable elsewhere; settings are saved under `%APPDATA%\youtube-downloader\settings.json`.
+
+The Windows build keeps the Linux build and Debian packaging scripts intact. Windows downloads and playlist features use the same `yt-dlp` backend.
 
 ## Install and run with `uv` (recommended)
 
